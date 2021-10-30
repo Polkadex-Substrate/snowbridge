@@ -77,7 +77,8 @@ pub mod pallet {
 	#[pallet::metadata(T::AccountId = "AccountId")]
 	pub enum Event<T: Config> {
 		Burned(T::AccountId, H160, U256),
-		Minted(H160, T::AccountId, U256),
+		Minted(H160, T::AccountId, u32, U256),
+		XcmTransferred(H160, <T::Lookup as StaticLookup>::Source, u32, U256),
 	}
 
 	#[pallet::storage]
@@ -136,16 +137,27 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			sender: H160,
 			recipient: <T::Lookup as StaticLookup>::Source,
+			para_id: u32,
 			amount: U256,
 		) -> DispatchResult {
 			let who = T::CallOrigin::ensure_origin(origin)?;
 			if who != <Address<T>>::get() {
-				return Err(DispatchError::BadOrigin.into())
+				return Err(DispatchError::BadOrigin.into());
+			}
+
+			if para_id != 0 {
+				Self::deposit_event(Event::XcmTransferred(
+					sender,
+					recipient.clone(),
+					para_id,
+					amount,
+				));
+				return Ok(());
 			}
 
 			let recipient = T::Lookup::lookup(recipient)?;
 			T::Asset::deposit(&recipient, amount)?;
-			Self::deposit_event(Event::Minted(sender, recipient.clone(), amount));
+			Self::deposit_event(Event::Minted(sender, recipient.clone(), para_id, amount));
 
 			Ok(())
 		}
