@@ -40,7 +40,7 @@ benchmarks! {
 		let sender = H160::zero();
 		let amount: U256 = 500.into();
 
-		let call = Call::<T>::mint(sender, recipient_lookup, amount);
+		let call = Call::<T>::mint(sender, recipient_lookup, amount, 0u32);
 
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
