@@ -1,7 +1,8 @@
 use codec::{Decode, Encode};
 use ethereum_types::{H128, H256, H512, H64};
 use sp_io::hashing::{keccak_256, keccak_512, sha2_256};
-use sp_runtime::{scale_info::TypeInfo, RuntimeDebug};
+use sp_runtime::{ RuntimeDebug};
+use scale_info::TypeInfo;
 use sp_std::{cell::RefCell, collections::btree_map::BTreeMap, prelude::*};
 
 pub use crate::ethashdata::{DAGS_MERKLE_ROOTS, DAGS_START_EPOCH};
