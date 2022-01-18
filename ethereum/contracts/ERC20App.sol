@@ -4,6 +4,7 @@ pragma experimental ABIEncoderV2;
 
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "./ScaleCodec.sol";
 import "./OutboundChannel.sol";
 
@@ -14,6 +15,8 @@ enum ChannelId {
 
 contract ERC20App is AccessControl {
     using ScaleCodec for uint256;
+    using ScaleCodec for uint32;
+    using SafeERC20 for IERC20;
 
     mapping(address => uint256) public balances;
 
@@ -25,7 +28,8 @@ contract ERC20App is AccessControl {
         address token,
         address sender,
         bytes32 recipient,
-        uint256 amount
+        uint256 amount,
+        uint32 paraId
     );
 
     event Unlocked(
@@ -60,7 +64,8 @@ contract ERC20App is AccessControl {
         address _token,
         bytes32 _recipient,
         uint256 _amount,
-        ChannelId _channelId
+        ChannelId _channelId,
+        uint32 _paraId
     ) public {
         require(
             _channelId == ChannelId.Basic ||
@@ -70,9 +75,14 @@ contract ERC20App is AccessControl {
 
         balances[_token] = balances[_token] + _amount;
 
-        emit Locked(_token, msg.sender, _recipient, _amount);
+        emit Locked(_token, msg.sender, _recipient, _amount, _paraId);
 
-        bytes memory call = encodeCall(_token, msg.sender, _recipient, _amount);
+        bytes memory call;
+        if(_paraId == 0) {
+            call = encodeCall(_token, msg.sender, _recipient, _amount);
+        } else {
+            call = encodeCallWithParaId(_token, msg.sender, _recipient, _amount, _paraId);
+        }
 
         OutboundChannel channel = OutboundChannel(
             channels[_channelId].outbound
@@ -98,10 +108,7 @@ contract ERC20App is AccessControl {
         );
 
         balances[_token] = balances[_token] - _amount;
-        require(
-            IERC20(_token).transfer(_recipient, _amount),
-            "ERC20 token transfer failed"
-        );
+        IERC20(_token).safeTransfer(_recipient, _amount);
         emit Unlocked(_token, _sender, _recipient, _amount);
     }
 
@@ -112,14 +119,34 @@ contract ERC20App is AccessControl {
         bytes32 _recipient,
         uint256 _amount
     ) private pure returns (bytes memory) {
-        return
-            abi.encodePacked(
+        return abi.encodePacked(
                 MINT_CALL,
                 _token,
                 _sender,
                 bytes1(0x00), // Encode recipient as MultiAddress::Id
                 _recipient,
-                _amount.encode256()
+                _amount.encode256(),
+                bytes1(0x00)
+            );
+    }
+
+    // SCALE-encode payload with parachain Id
+    function encodeCallWithParaId(
+        address _token,
+        address _sender,
+        bytes32 _recipient,
+        uint256 _amount,
+        uint32 _paraId
+    ) private pure returns (bytes memory) {
+        return abi.encodePacked(
+                MINT_CALL,
+                _token,
+                _sender,
+                bytes1(0x00), // Encode recipient as MultiAddress::Id
+                _recipient,
+                _amount.encode256(),
+                bytes1(0x01),
+                _paraId.encode32()
             );
     }
 }
