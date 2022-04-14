@@ -60,9 +60,15 @@ contract BeefyLightClient {
      * @param validatorSetId validator set id that signed the given commitment
      */
     struct Commitment {
-        bytes32 payload;
-        uint64 blockNumber;
-        uint32 validatorSetId;
+        uint32 blockNumber;
+        uint64 validatorSetId;
+        Payload payload;
+    }
+
+    struct Payload {
+        bytes32 mmrRootHash;
+        bytes prefix;
+        bytes suffix;
     }
 
     /**
@@ -109,10 +115,10 @@ contract BeefyLightClient {
         uint8 version;
         uint32 parentNumber;
         bytes32 parentHash;
-        bytes32 parachainHeadsRoot;
         uint64 nextAuthoritySetId;
         uint32 nextAuthoritySetLen;
         bytes32 nextAuthoritySetRoot;
+        bytes32 parachainHeadsRoot;
     }
 
     /* State */
@@ -287,11 +293,11 @@ contract BeefyLightClient {
         verifyCommitment(id, commitment, validatorProof);
         verifyNewestMMRLeaf(
             latestMMRLeaf,
-            commitment.payload,
+            commitment.payload.mmrRootHash,
             proof
         );
 
-        processPayload(commitment.payload, commitment.blockNumber);
+        processPayload(commitment.payload.mmrRootHash, commitment.blockNumber);
 
         applyValidatorSetChanges(
             latestMMRLeaf.nextAuthoritySetId,
@@ -308,6 +314,7 @@ contract BeefyLightClient {
     }
 
     /* Private Functions */
+
 
     /**
      * @notice Deterministically generates a seed from the block hash at the block number of creation of the validation
@@ -337,12 +344,11 @@ contract BeefyLightClient {
         SimplifiedMMRProof calldata proof
     ) public view {
         bytes memory encodedLeaf = encodeMMRLeaf(leaf);
-        bytes32 hashedLeaf = hashMMRLeaf(encodedLeaf);
+        bytes32 hashedLeaf = keccak256(encodedLeaf);
 
-        mmrVerification.verifyInclusionProof(
-            root,
-            hashedLeaf,
-            proof
+        require(
+            mmrVerification.verifyInclusionProof(root, hashedLeaf, proof),
+            "Invalid proof"
         );
     }
 
@@ -485,7 +491,8 @@ contract BeefyLightClient {
         Commitment calldata commitment
     ) internal view {
         // Encode and hash the commitment
-        bytes32 commitmentHash = createCommitmentHash(commitment);
+        bytes memory encodedCommitment = encodeCommitment(commitment);
+        bytes32 commitmentHash = keccak256(encodedCommitment);
 
         /**
          *  @dev For each randomSignature, do:
@@ -544,41 +551,26 @@ contract BeefyLightClient {
         );
     }
 
-    function createCommitmentHash(Commitment calldata commitment)
-        public
-        pure
-        returns (bytes32)
-    {
-        return
-            keccak256(
-                abi.encodePacked(
-                    commitment.payload,
-                    commitment.blockNumber.encode64(),
-                    commitment.validatorSetId.encode32()
-                )
-            );
-    }
-
-    // To scale encode the byte array, we need to prefix it
-    // with it's length. This is the expected current length of a leaf.
-    // The length here is 113 bytes:
-    // - 1 byte for the version
-    // - 4 bytes for the block number
-    // - 32 bytes for the block hash
-    // - 8 bytes for the next validator set ID
-    // - 4 bytes for the length of it
-    // - 32 bytes for the root hash of it
-    // - 32 bytes for the parachain heads merkle root
-    // That number is then compact encoded unsigned integer - see SCALE spec
-    bytes2 public constant MMR_LEAF_LENGTH_SCALE_ENCODED =
-        bytes2(uint16(0xc501));
-
-    function encodeMMRLeaf(BeefyMMRLeaf calldata leaf)
-        public
+    function encodeCommitment(Commitment calldata commitment)
+        internal
         pure
         returns (bytes memory)
     {
-        bytes memory scaleEncodedMMRLeaf = abi.encodePacked(
+        return bytes.concat(
+            commitment.payload.prefix,
+            commitment.payload.mmrRootHash,
+            commitment.payload.suffix,
+            commitment.blockNumber.encode32(),
+            commitment.validatorSetId.encode64()
+        );
+    }
+
+    function encodeMMRLeaf(BeefyMMRLeaf calldata leaf)
+        internal
+        pure
+        returns (bytes memory)
+    {
+        return bytes.concat(
             ScaleCodec.encode8(leaf.version),
             ScaleCodec.encode32(leaf.parentNumber),
             leaf.parentHash,
@@ -587,11 +579,5 @@ contract BeefyLightClient {
             leaf.nextAuthoritySetRoot,
             leaf.parachainHeadsRoot
         );
-
-        return bytes.concat(MMR_LEAF_LENGTH_SCALE_ENCODED, scaleEncodedMMRLeaf);
-    }
-
-    function hashMMRLeaf(bytes memory leaf) public pure returns (bytes32) {
-        return keccak256(leaf);
     }
 }

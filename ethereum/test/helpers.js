@@ -9,7 +9,7 @@ const ValidatorRegistry = artifacts.require("ValidatorRegistry");
 const SimplifiedMMRVerification = artifacts.require("SimplifiedMMRVerification");
 const BeefyLightClient = artifacts.require("BeefyLightClient");
 
-const fixture = require('./fixtures/full-flow-basic.json');
+const fixture = require('./fixtures/beefy-relay-basic.json');
 
 let lazyLinked = false;
 const lazyLinkLibraries = async _ => {
@@ -76,10 +76,10 @@ const deployAppWithMockChannels = async (deployer, channels, appContract, ...app
 
 const deployBeefyLightClient = async (root, numberOfValidators) => {
   if (!root) {
-    root = fixture.completeSubmitInput.latestMMRLeaf.nextAuthoritySetRoot;
+    root = fixture.finalSignatureCommitment.leaf.nextAuthoritySetRoot
   }
   if (!numberOfValidators) {
-    numberOfValidators = fixture.completeSubmitInput.latestMMRLeaf.nextAuthoritySetLen
+    numberOfValidators = fixture.finalSignatureCommitment.leaf.nextAuthoritySetLen
   }
 
   const validatorRegistry = await initValidatorRegistry(root,
@@ -125,8 +125,6 @@ async function mine(n) {
     }, (err, res) => { });
   }
 }
-
-const addressBytes = (address) => Buffer.from(address.replace(/^0x/, ""), "hex");
 
 const encodeLog = (log) => {
   return rlp.encode([log.address, log.topics, log.data]).toString("hex")
@@ -189,7 +187,6 @@ module.exports = {
   createMerkleTree,
   signatureSubstrateToEthereum,
   mine,
-  addressBytes,
   ChannelId,
   encodeLog,
   mergeKeccak256,
