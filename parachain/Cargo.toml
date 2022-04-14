@@ -111,7 +111,7 @@ panic = "unwind"
 [workspace]
 members = [
     "primitives/core",
-    "primitives/ethereum",
+#    "primitives/ethereum",
     "primitives/testutils",
     "primitives/xcm-support",
     "primitives/asset-registry",
@@ -132,4 +132,8 @@ members = [
     "utils/test-parachain/node",
     "utils/test-parachain/pallets/test",
     "utils/test-parachain/runtime",
+]
+
+exclude = [
+    "primitives/ethereum"
 ]
